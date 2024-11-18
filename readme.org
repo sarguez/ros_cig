@@ -1,2 +1,11 @@
 
 cig (CATKIN_IGNORE Generator) is a simple command line utility that adds / removes CATKIN_IGNORE files into your subdirectories.
+
+*How to Use:*
+- Add the script 'cig' to your path
+- Call cig, it will display the folders in your ~/catkin_ws/src with depth of 1 by default.
+  (check cig - h to change the workspace directory, or the displayed depth)
+- Cross means that there is a CATKIN_IGNORE in that directory.
+  Add a cross to add CATKIN_IGNORE to that directory.
+  Remove an existing cross to remove the CATKIN_IGNORE file from that directory.
+[[./img/202411181613-47.png]]
