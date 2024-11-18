@@ -1,0 +1,137 @@
+#!/usr/bin/python3
+import os
+import typing
+import urwid
+import argparse
+from pathlib import Path
+
+#########################################################
+## Config
+#########################################################
+EXCLUDE_DIRECTORIES_STARTING_WITH = [".", "_"]
+
+
+#########################################################
+## Catkin Ignore Generator
+#########################################################
+class Cig:
+    def __init__(self):
+        self.args = self.cli_arguments()
+        self.directories_and_checkboxes_dict: typing.Dict[str : urwid.CheckBox] = {}
+
+    @staticmethod
+    def cli_arguments():
+        parser = argparse.ArgumentParser(
+            prog="cig",
+            description="cig is a simple command line utility that adds / removes CATKIN_IGNORE files.",
+        )
+
+        parser.add_argument(
+            "rootdir",
+            nargs="?",
+            default=os.path.join(os.getenv("HOME"), "catkin_ws", "src"),
+            help="Root directory to run cig in. (default = ~/catkin_ws/src)",
+        )
+        parser.add_argument(
+            "-d",
+            "--depth",
+            type=int,
+            default=2,
+            help="Depth of subdirectories to display.",
+        )
+        return parser.parse_args()
+
+    @staticmethod
+    def is_dir_has_catkin_ignore(dir: str) -> bool:
+        return os.path.isfile(os.path.join(dir, "CATKIN_IGNORE"))
+
+    def define_urwid_checkboxes(
+        self, rootdir: str, max_depth: int, current_depth: int = 0
+    ) -> None:
+        """
+        Iterates over the sub directories of the given rootdir, for the given max_depth levels.
+        Defines a urwid checkbox for each of the non-excluded directory.
+        State of the checkbox is ticked if the directory already has a CATKIN_IGNORE file directly under it.
+        """
+        if current_depth > max_depth:
+            return
+
+        for item in os.listdir(rootdir):
+            item_path = os.path.join(rootdir, item)
+            if (
+                os.path.isdir(item_path)
+                and not os.path.basename(item_path)[0]
+                in EXCLUDE_DIRECTORIES_STARTING_WITH
+            ):
+
+                self.directories_and_checkboxes_dict[item_path] = urwid.CheckBox(
+                    f"{'  '*current_depth} - {item}",
+                    state=self.is_dir_has_catkin_ignore(item_path),
+                )
+
+                this_directory_is_already_a_catkin_package = os.path.isfile(
+                    os.path.join(item_path, "package.xml")
+                )
+                if not this_directory_is_already_a_catkin_package:
+                    self.define_urwid_checkboxes(
+                        item_path, max_depth, current_depth + 1
+                    )
+
+    def display_urwid_checkboxes(self) -> None:
+        """
+        Runs the urwid MainLoop. This is what the user interacts with.
+        """
+
+        def on_input(key):
+            if key == "q":
+                raise urwid.ExitMainLoop()
+            elif key == "x":
+                raise SystemExit
+
+        urwid_elements = list(self.directories_and_checkboxes_dict.values())
+
+        urwid_elements.append(
+            urwid.Text(
+                f"\nDisplaying {len(self.directories_and_checkboxes_dict.values())} items."
+            )
+        )
+        urwid_elements.append(
+            urwid.Text("\nCheck / Uncheck checkboxes to add / remove CATKIN_IGNORE.")
+        )
+        urwid_elements.append(urwid.Text("Press 'q' to accept changes and exit."))
+        urwid_elements.append(urwid.Text("Press 'x' to discard changes and exit."))
+
+        listbox = urwid.ListBox(urwid.SimpleFocusListWalker(urwid_elements))
+        loop = urwid.MainLoop(listbox, unhandled_input=on_input)
+        loop.run()
+
+    def apply_catkin_ignore_changes(self):
+        """
+        Adds / removes CATKIN_IGNORE files from the directories,
+        depending on the state of the checkboxes the directories are associated with.
+        """
+        for directory, checkbox in self.directories_and_checkboxes_dict.items():
+            needs_catkin_ignore = checkbox.state
+
+            if needs_catkin_ignore and not self.is_dir_has_catkin_ignore(directory):
+                Path(os.path.join(directory, "CATKIN_IGNORE")).touch()
+                print(f"CATKIN_IGNORE added to {directory}.")
+
+            elif not needs_catkin_ignore and self.is_dir_has_catkin_ignore(directory):
+                os.remove(os.path.join(directory, "CATKIN_IGNORE"))
+                print(f"CATKIN_IGNORE removed from {directory}.")
+
+    def run(self):
+        self.define_urwid_checkboxes(
+            os.path.abspath(self.args.rootdir), max_depth=self.args.depth
+        )
+        self.display_urwid_checkboxes()
+        self.apply_catkin_ignore_changes()
+
+
+#########################################################
+## Main
+#########################################################
+if __name__ == "__main__":
+    cig = Cig()
+    cig.run()

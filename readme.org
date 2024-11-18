@@ -1,0 +1,2 @@
+
+cig (CATKIN_IGNORE Generator) is a simple command line utility that adds / removes CATKIN_IGNORE files into your subdirectories.
